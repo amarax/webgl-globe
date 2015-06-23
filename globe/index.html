@@ -123,10 +123,11 @@
     <span>This is a Chrome Experiment</span>
   </a>
 
-  <script type="text/javascript" src="/globe/third-party/Detector.js"></script>
-  <script type="text/javascript" src="/globe/third-party/three.min.js"></script>
-  <script type="text/javascript" src="/globe/third-party/Tween.js"></script>
-  <script type="text/javascript" src="/globe/globe.js"></script>
+  <script type="text/javascript" src="./third-party/Detector.js"></script>
+  <script type="text/javascript" src="./third-party/three.min.js"></script>
+  <script type="text/javascript" src="./third-party/Tween.js"></script>
+  <script type="text/javascript" src="./camera.js"></script>
+  <script type="text/javascript" src="./globe.js"></script>
   <script type="text/javascript">
 
     if(!Detector.webgl){
@@ -154,7 +155,7 @@
           y.setAttribute('class', 'year active');
         };
       };
-      
+
       for(var i = 0; i<years.length; i++) {
         var y = document.getElementById('year'+years[i]);
         y.addEventListener('mouseover', settime(globe,i), false);

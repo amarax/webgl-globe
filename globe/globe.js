@@ -65,23 +65,41 @@ DAT.Globe = function(container, opts) {
           'gl_FragColor = vec4( 1.0, 1.0, 1.0, 1.0 ) * intensity;',
         '}'
       ].join('\n')
+    },
+    'dataPoint' : {
+      uniforms: {
+        'radius': { type: 'f', value: 1.0 },
+      },
+      vertexShader: [
+        'void main() {',
+          'gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform color vec3;',
+        'uniform opacity float;',
+        'void main() {',
+          'gl_FragColor = vec4( color, opacity );',
+        '}'
+      ].join('\n')
     }
+
   };
+
+  var cameraController;
 
   var camera, scene, renderer, w, h;
   var mesh, atmosphere, point;
+  var globeMesh;
 
   var overRenderer;
 
-  var curZoomSpeed = 0;
-  var zoomSpeed = 50;
 
   var mouse = { x: 0, y: 0 }, mouseOnDown = { x: 0, y: 0 };
   var rotation = { x: 0, y: 0 },
       target = { x: Math.PI*3/2, y: Math.PI / 6.0 },
       targetOnDown = { x: 0, y: 0 };
 
-  var distance = 100000, distanceTarget = 100000;
   var padding = 40;
   var PI_HALF = Math.PI / 2;
 
@@ -94,11 +112,9 @@ DAT.Globe = function(container, opts) {
     w = container.offsetWidth || window.innerWidth;
     h = container.offsetHeight || window.innerHeight;
 
-    camera = new THREE.PerspectiveCamera(30, w / h, 1, 10000);
-    camera.position.z = distance;
-
     scene = new THREE.Scene();
 
+    // Setup Earth
     var geometry = new THREE.SphereGeometry(200, 40, 30);
 
     shader = Shaders['earth'];
@@ -118,6 +134,9 @@ DAT.Globe = function(container, opts) {
     mesh.rotation.y = Math.PI;
     scene.add(mesh);
 
+    globeMesh = mesh;
+
+    // Setup Atmosphere
     shader = Shaders['atmosphere'];
     uniforms = THREE.UniformsUtils.clone(shader.uniforms);
 
@@ -136,10 +155,18 @@ DAT.Globe = function(container, opts) {
     mesh.scale.set( 1.1, 1.1, 1.1 );
     scene.add(mesh);
 
-    geometry = new THREE.BoxGeometry(0.75, 0.75, 1);
+    // Setup DataPoint template
+    var pointSize = 0.5;
+    geometry = new THREE.BoxGeometry(pointSize, pointSize, 1);
     geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0,0,-0.5));
 
     point = new THREE.Mesh(geometry);
+
+
+    camera = new THREE.PerspectiveCamera(30, w / h, 1, 10000);
+    cameraController = new CAM.CameraController(camera, globeMesh, scene);
+    cameraController.setupDebugGeometry();
+
 
     renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(w, h);
@@ -283,51 +310,57 @@ DAT.Globe = function(container, opts) {
     targetOnDown.x = target.x;
     targetOnDown.y = target.y;
 
+    cameraController.onMouseDown(event);
+
     container.style.cursor = 'move';
   }
 
   function onMouseMove(event) {
-    mouse.x = - event.clientX;
-    mouse.y = event.clientY;
+      // mouse.x = - event.clientX;
+      // mouse.y = event.clientY;
 
-    var zoomDamp = distance/1000;
+      // target.x = targetOnDown.x + (mouse.x - mouseOnDown.x) * zoomDamp;
+      // target.y = targetOnDown.y + (mouse.y - mouseOnDown.y) * zoomDamp;
 
-    target.x = targetOnDown.x + (mouse.x - mouseOnDown.x) * 0.005 * zoomDamp;
-    target.y = targetOnDown.y + (mouse.y - mouseOnDown.y) * 0.005 * zoomDamp;
+      // target.y = target.y > PI_HALF ? PI_HALF : target.y;
+      // target.y = target.y < - PI_HALF ? - PI_HALF : target.y;
 
-    target.y = target.y > PI_HALF ? PI_HALF : target.y;
-    target.y = target.y < - PI_HALF ? - PI_HALF : target.y;
+      cameraController.onMouseMove(event);
   }
 
-  function onMouseUp(event) {
+  function cleanupMouseDown()
+  {
     container.removeEventListener('mousemove', onMouseMove, false);
     container.removeEventListener('mouseup', onMouseUp, false);
     container.removeEventListener('mouseout', onMouseOut, false);
+  }
+
+  function onMouseUp(event) {
+    cleanupMouseDown();
     container.style.cursor = 'auto';
   }
 
   function onMouseOut(event) {
-    container.removeEventListener('mousemove', onMouseMove, false);
-    container.removeEventListener('mouseup', onMouseUp, false);
-    container.removeEventListener('mouseout', onMouseOut, false);
+    cleanupMouseDown();
   }
 
   function onMouseWheel(event) {
     event.preventDefault();
+
     if (overRenderer) {
-      zoom(event.wheelDeltaY * 0.3);
+      cameraController.onMouseWheel(event);
     }
     return false;
   }
 
   function onDocumentKeyDown(event) {
     switch (event.keyCode) {
-      case 38:
-        zoom(100);
+      case 38: // Key UP
+        // cameraController.zoom(100);
         event.preventDefault();
         break;
-      case 40:
-        zoom(-100);
+      case 40:  // Key DOWN
+        // cameraController.zoom(-100);
         event.preventDefault();
         break;
     }
@@ -339,29 +372,13 @@ DAT.Globe = function(container, opts) {
     renderer.setSize( container.offsetWidth, container.offsetHeight );
   }
 
-  function zoom(delta) {
-    distanceTarget -= delta;
-    distanceTarget = distanceTarget > 1000 ? 1000 : distanceTarget;
-    distanceTarget = distanceTarget < 350 ? 350 : distanceTarget;
-  }
-
   function animate() {
     requestAnimationFrame(animate);
     render();
   }
 
   function render() {
-    zoom(curZoomSpeed);
-
-    rotation.x += (target.x - rotation.x) * 0.1;
-    rotation.y += (target.y - rotation.y) * 0.1;
-    distance += (distanceTarget - distance) * 0.3;
-
-    camera.position.x = distance * Math.sin(rotation.x) * Math.cos(rotation.y);
-    camera.position.y = distance * Math.sin(rotation.y);
-    camera.position.z = distance * Math.cos(rotation.x) * Math.cos(rotation.y);
-
-    camera.lookAt(mesh.position);
+    cameraController.update();
 
     renderer.render(scene, camera);
   }
