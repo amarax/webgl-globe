@@ -5,6 +5,9 @@ GLOBEDATA.PointCloud = function(aScene)
   var scene = aScene;
 
   var positions, colors;
+  var geom;
+  var earthRadius = 6378100.0;
+  var sphereRadius = 200.0;
 
   var getSourceSynch = function(url) {
     var req = new XMLHttpRequest();
@@ -15,8 +18,8 @@ GLOBEDATA.PointCloud = function(aScene)
 
   var calc3DPos = function(lat, lng, alt)
   {
-    var earthRadius = 6378100.0;
-    var sphereRadius = 200.0;
+    lat = Math.random() * 180 - 90;
+    lng = Math.random() * 360;
 
     var phi = (90 - lat) * Math.PI / 180;
     var theta = (180 - lng) * Math.PI / 180;
@@ -33,7 +36,7 @@ GLOBEDATA.PointCloud = function(aScene)
   this.init = function(aData)
   {
     var data = aData;
-    var geom = new THREE.BufferGeometry();
+    geom = new THREE.BufferGeometry();
 
     var iterations = 3;
 
@@ -49,7 +52,7 @@ GLOBEDATA.PointCloud = function(aScene)
 
       for (j = 1; j <= iterations; j++ )
       {
-        var pos = calc3DPos(lat, lng, (j / iterations) * 400000.0);
+        var pos = calc3DPos(lat, lng, 0.0);
 
         var currentIndex = i * j + j - 1;
         currentIndex *= 3;
@@ -75,12 +78,17 @@ GLOBEDATA.PointCloud = function(aScene)
 
   this.update = function()
   {
-    var newColor = (new Date().getTime() % 1000) / 1000.0;
-    //console.log(newColor);
-    for( i = 0; i < colors.length; i++ )
-    {
-      colors[i] = newColor;
+    var colorAttribute = geom.getAttribute( 'color' );
 
+    for( i = 0; i < colorAttribute.count; i++ )
+    {
+      var period = 10000.0;
+      var newColor = new Date().getTime();
+      newColor += period * (positions[i * 3 + 1] - sphereRadius) / (2 * sphereRadius);
+      newColor = (newColor % period) / period;
+      newColor *= 5.0;
+      colorAttribute.setXYZ(i, newColor * 0.03, newColor * 0.1, newColor * 0.2);
+      colorAttribute.needsUpdate = true;
     }
   }
 }
