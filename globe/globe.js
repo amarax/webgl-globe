@@ -15,13 +15,20 @@ var DAT = DAT || {};
 
 DAT.Globe = function(container, opts) {
   opts = opts || {};
-  
+
   var colorFn = opts.colorFn || function(x) {
     var c = new THREE.Color();
     c.setHSL( ( 0.6 - ( x * 0.5 ) ), 1.0, 0.5 );
     return c;
   };
   var imgDir = opts.imgDir || '/globe/';
+
+  var getSourceSynch = function(url) {
+    var req = new XMLHttpRequest();
+    req.open("GET", url, false);
+    req.send(null);
+    return (req.status == 200) ? req.responseText : null;
+  };
 
   var Shaders = {
     'earth' : {
@@ -70,18 +77,8 @@ DAT.Globe = function(container, opts) {
       uniforms: {
         'radius': { type: 'f', value: 1.0 },
       },
-      vertexShader: [
-        'void main() {',
-          'gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );',
-        '}'
-      ].join('\n'),
-      fragmentShader: [
-        'uniform color vec3;',
-        'uniform opacity float;',
-        'void main() {',
-          'gl_FragColor = vec4( color, opacity );',
-        '}'
-      ].join('\n')
+      vertexShader: getSourceSynch("shaders/datapoint.vert"),
+      fragmentShader: getSourceSynch("shaders/datapoint.frag")
     }
 
   };
@@ -90,15 +87,18 @@ DAT.Globe = function(container, opts) {
 
   var camera, scene, renderer, w, h;
   var mesh, atmosphere, point;
+  var pointCloud;
   var globeMesh;
 
   var overRenderer;
 
-
+  var distance = 1000, distanceTarget = 1000;
   var mouse = { x: 0, y: 0 }, mouseOnDown = { x: 0, y: 0 };
   var rotation = { x: 0, y: 0 },
       target = { x: Math.PI*3/2, y: Math.PI / 6.0 },
       targetOnDown = { x: 0, y: 0 };
+
+  var lastFrameTime;
 
   var padding = 40;
   var PI_HALF = Math.PI / 2;
@@ -162,11 +162,11 @@ DAT.Globe = function(container, opts) {
 
     point = new THREE.Mesh(geometry);
 
-
     camera = new THREE.PerspectiveCamera(30, w / h, 1, 10000);
     cameraController = new CAM.CameraController(camera, globeMesh, scene);
-    cameraController.setupDebugGeometry();
+    //cameraController.setupDebugGeometry();
 
+    pointCloud = new GLOBEDATA.PointCloud(scene);
 
     renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(w, h);
@@ -214,7 +214,7 @@ DAT.Globe = function(container, opts) {
         for (i = 0; i < data.length; i += step) {
           lat = data[i];
           lng = data[i + 1];
-//        size = data[i + 2];
+          // size = data[i + 2];
           color = colorFnWrapper(data,i);
           size = 0;
           addPoint(lat, lng, size, color, this._baseGeometry);
@@ -233,7 +233,7 @@ DAT.Globe = function(container, opts) {
       lng = data[i + 1];
       color = colorFnWrapper(data,i);
       size = data[i + 2];
-      size = size*200;
+      size = size*0.1;
       addPoint(lat, lng, size, color, subgeo);
     }
     if (opts.animated) {
@@ -242,6 +242,8 @@ DAT.Globe = function(container, opts) {
       this._baseGeometry = subgeo;
     }
 
+
+    pointCloud.init(data);
   };
 
   function createPoints() {
@@ -265,10 +267,13 @@ DAT.Globe = function(container, opts) {
         this.points = new THREE.Mesh(this._baseGeometry, new THREE.MeshBasicMaterial({
               color: 0xffffff,
               vertexColors: THREE.FaceColors,
-              morphTargets: true
+              morphTargets: true,
+              transparent: true,
+              opacity: 1.0,
+              blending: THREE.AdditiveBlending
             }));
       }
-      scene.add(this.points);
+      //scene.add(this.points);
     }
   }
 
@@ -310,22 +315,24 @@ DAT.Globe = function(container, opts) {
     targetOnDown.x = target.x;
     targetOnDown.y = target.y;
 
-    cameraController.onMouseDown(event);
+    // cameraController.onMouseDown(event);
 
     container.style.cursor = 'move';
   }
 
   function onMouseMove(event) {
-      // mouse.x = - event.clientX;
-      // mouse.y = event.clientY;
+      mouse.x = - event.clientX;
+      mouse.y = event.clientY;
 
-      // target.x = targetOnDown.x + (mouse.x - mouseOnDown.x) * zoomDamp;
-      // target.y = targetOnDown.y + (mouse.y - mouseOnDown.y) * zoomDamp;
+      var zoomDamp = distance/500000;
 
-      // target.y = target.y > PI_HALF ? PI_HALF : target.y;
-      // target.y = target.y < - PI_HALF ? - PI_HALF : target.y;
+      target.x = targetOnDown.x + (mouse.x - mouseOnDown.x) * zoomDamp;
+      target.y = targetOnDown.y + (mouse.y - mouseOnDown.y) * zoomDamp;
 
-      cameraController.onMouseMove(event);
+      target.y = target.y > PI_HALF ? PI_HALF : target.y;
+      target.y = target.y < - PI_HALF ? - PI_HALF : target.y;
+
+      // cameraController.onMouseMove(event);
   }
 
   function cleanupMouseDown()
@@ -374,11 +381,30 @@ DAT.Globe = function(container, opts) {
 
   function animate() {
     requestAnimationFrame(animate);
+
+    var now = new Date().getTime(),
+      dt = now - (lastFrameTime || now);
+
+    lastFrameTime = now;
+
+    pointCloud.update();
+
     render();
   }
 
   function render() {
-    cameraController.update();
+    // cameraController.update();
+
+    // Original camera control
+    rotation.x += (target.x - rotation.x) * 0.5;
+    rotation.y += (target.y - rotation.y) * 0.5;
+    distance += (distanceTarget - distance) * 0.3;
+
+    camera.position.x = distance * Math.sin(rotation.x) * Math.cos(rotation.y);
+    camera.position.y = distance * Math.sin(rotation.y);
+    camera.position.z = distance * Math.cos(rotation.x) * Math.cos(rotation.y);
+
+    camera.lookAt(mesh.position);
 
     renderer.render(scene, camera);
   }
@@ -423,4 +449,3 @@ DAT.Globe = function(container, opts) {
   return this;
 
 };
-

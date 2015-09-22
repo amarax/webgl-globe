@@ -93,7 +93,7 @@ CAM.CameraController = function(aCamera, aCameraTarget, aScene)
 	    mouseOnDownCameraRotation = mouseDownCameraIndicatorMesh.quaternion.clone();
 
 	    cameraTargetRotation.copy(mouseOnDownCameraRotation);
-	}
+		}
 
 	this.onMouseMove = function(event)
 	{
@@ -129,6 +129,7 @@ CAM.CameraController = function(aCamera, aCameraTarget, aScene)
 	        cameraTargetRotation.multiply( cameraRotationOffset );
 	      }
 	    }
+
 	}
 
 	this.onMouseWheel = function(event)

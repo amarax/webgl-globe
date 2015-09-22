@@ -127,6 +127,7 @@
   <script type="text/javascript" src="./third-party/three.min.js"></script>
   <script type="text/javascript" src="./third-party/Tween.js"></script>
   <script type="text/javascript" src="./camera.js"></script>
+  <script type="text/javascript" src="./globedata.js"></script>
   <script type="text/javascript" src="./globe.js"></script>
   <script type="text/javascript">
 
@@ -140,7 +141,7 @@
 
       console.log(globe);
       var i, tweens = [];
-      
+
       var settime = function(globe, t) {
         return function() {
           new TWEEN.Tween(globe).to({time: t/years.length},500).easing(TWEEN.Easing.Cubic.EaseOut).start();
@@ -160,11 +161,11 @@
         var y = document.getElementById('year'+years[i]);
         y.addEventListener('mouseover', settime(globe,i), false);
       }
-      
+
       var xhr;
       TWEEN.start();
-      
-      
+
+
       xhr = new XMLHttpRequest();
       xhr.open('GET', '/globe/population909500.json', true);
       xhr.onreadystatechange = function(e) {
